@@ -6,6 +6,7 @@ import json
 import os
 from tkinter import PhotoImage
 from concurrent.futures import ThreadPoolExecutor
+import threading
 
 def load_program_data():
     file_path = os.path.join(os.path.dirname(__file__), 'programs.json')
@@ -29,13 +30,19 @@ def confirmation_message(selected_programs):
     message = "Вы выбрали для установки:\n" + '\n'.join(selected_programs)
     if messagebox.askyesno("Подтверждение установки", message):
         try:
-            with ThreadPoolExecutor() as executor:
-                futures = [executor.submit(install_program_with_winget, program_name) for program_name in selected_programs]
-                for future in futures:
-                    future.result()
-            success_window(selected_programs)
+            threading.Thread(target=install_selected_programs_in_background, args=(selected_programs,)).start()
         except Exception as e:
             error_window(str(e))
+
+def install_selected_programs_in_background(selected_programs):
+    try:
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(install_program_with_winget, program_name) for program_name in selected_programs]
+            for future in futures:
+                future.result()
+        success_window(selected_programs)
+    except Exception as e:
+        error_window(str(e))
 
 def success_window(selected_programs):
     messagebox.showinfo("Успешно установлено - QuickGet", "Успешно установлены:\n" + '\n'.join(selected_programs))
@@ -46,7 +53,7 @@ def error_window(error_message):
 def install_program_with_winget(program_name):
     try:
         program_id = programs[program_name]["id"]
-        subprocess.run(["winget", "install", program_id, "--source", "winget"], check=True)
+        subprocess.run(["winget", "install", "--id", program_id, "--source", "winget"], check=True)
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Ошибка при установке программы {program_name}: {e}")
 
@@ -61,7 +68,7 @@ programs = load_program_data()
 root = tk.Tk()
 root.title("QuickGet")
 set_window_icon(root)
-root.geometry("398x600")
+root.geometry("398x900")
 root.configure(bg="#1e1e1e")
 root.resizable(False, False)
 canvas = tk.Canvas(root, bg="#1e1e1e", bd=0, highlightthickness=0)
